@@ -450,7 +450,10 @@
       <button class="mic-btn" id="mic-btn" onclick="toggleRecording()" title="Hold to speak">🎤</button>
       <div class="voice-status" id="voice-status">Press mic to start answering</div>
       <textarea class="transcript-box" id="transcript-box" placeholder="Your answer will appear here — you can edit it before submitting..." style="resize:vertical;min-height:80px;width:100%;"></textarea>
+      <div style="display:flex;gap:0.75rem;width:100%;justify-content:center;">
       <button class="btn submit-answer-btn" id="submit-btn" onclick="submitAnswer()">Submit Answer →</button>
+      <button class="btn btn-outline submit-answer-btn" id="skip-btn" onclick="skipQuestion()" style="width:auto;padding:0.7rem 1.5rem;">Skip ⏭</button>
+      </div>
     </div>
   </div>
 </div>
@@ -480,7 +483,7 @@
   const BACKEND_URL = 'https://mock-interview-backend-ocw5.onrender.com';
 
   // ── GOOGLE LOGIN ──
-function handleGoogleLogin(response) {
+ function handleGoogleLogin(response) {
   showScreen('setup-screen');
 }
   
@@ -599,6 +602,7 @@ Respond ONLY with a JSON array of 7 strings. No preamble, no markdown. Example:
     document.getElementById('progress-bar').style.width = `${((currentQ) / total) * 100}%`;
     const tb = document.getElementById('transcript-box'); tb.style.display = 'none'; tb.value = '';
     document.getElementById('submit-btn').style.display = 'none';
+    document.getElementById('skip-btn').style.display = 'inline-block';
     document.getElementById('voice-status').textContent = 'Press mic to start answering';
     document.getElementById('mic-btn').classList.remove('recording');
     currentTranscript = '';
@@ -667,6 +671,7 @@ Respond ONLY with a JSON array of 7 strings. No preamble, no markdown. Example:
     document.getElementById('voice-status').textContent = 'Answer captured. Submit when ready.';
     if (currentTranscript.trim()) {
       document.getElementById('submit-btn').style.display = 'inline-block';
+      document.getElementById('skip-btn').style.display = 'inline-block';
     } else {
       document.getElementById('voice-status').textContent = 'No answer detected. Try again.';
     }
@@ -875,6 +880,17 @@ Respond ONLY with a JSON array (no markdown, no preamble):
       btn.disabled = false;
       console.error(err);
       alert('Error: ' + err.message);
+    }
+  }
+
+  // ── SKIP QUESTION ──
+  function skipQuestion() {
+    answers.push({ question: questions[currentQ], answer: '[Skipped]' });
+    currentQ++;
+    if (currentQ < questions.length) {
+      showQuestion();
+    } else {
+      generateFeedback();
     }
   }
 
