@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>InterviewAI — Voice Mock Interview</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/docx/7.8.2/docx.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
 <style>
   :root {
@@ -448,7 +449,7 @@
     <div class="voice-controls">
       <button class="mic-btn" id="mic-btn" onclick="toggleRecording()" title="Hold to speak">🎤</button>
       <div class="voice-status" id="voice-status">Press mic to start answering</div>
-      <div class="transcript-box" id="transcript-box"></div>
+      <textarea class="transcript-box" id="transcript-box" placeholder="Your answer will appear here — you can edit it before submitting..." style="resize:vertical;min-height:80px;width:100%;"></textarea>
       <button class="btn submit-answer-btn" id="submit-btn" onclick="submitAnswer()">Submit Answer →</button>
     </div>
   </div>
@@ -469,6 +470,7 @@
     <div class="feedback-grid" id="params-grid"></div>
     <div id="feedback-sections"></div>
 
+    <button class="btn" id="download-btn" onclick="downloadPracticeGuide()" style="margin-bottom:1rem;">📥 Download Practice Guide</button>
     <button class="btn btn-outline restart-btn" onclick="restart()">← Start New Interview</button>
   </div>
 </div>
@@ -478,9 +480,21 @@
   const BACKEND_URL = 'https://mock-interview-backend-ocw5.onrender.com';
 
   // ── GOOGLE LOGIN ──
-function handleGoogleLogin(response) {
-  showScreen('setup-screen');
-}
+  const ALLOWED_EMAILS = [
+    "adityakhairwad158@gmail.com",  // Add your friends Gmail here
+  ];
+
+  function handleGoogleLogin(response) {
+    const payload = JSON.parse(atob(response.credential.split('.')[1]));
+    const email = payload.email;
+    if (ALLOWED_EMAILS.includes(email)) {
+      showScreen('setup-screen');
+    } else {
+      const err = document.getElementById('login-error');
+      err.textContent = 'Access denied. Your email is not authorized.';
+      err.style.display = 'block';
+    }
+  }
   let resumeText = '';
   let targetRole = '';
   let interviewType = '';
@@ -594,7 +608,7 @@ Respond ONLY with a JSON array of 7 strings. No preamble, no markdown. Example:
     document.getElementById('q-text').textContent = questions[currentQ];
     document.getElementById('progress-text').textContent = `Q ${currentQ + 1} of ${total}`;
     document.getElementById('progress-bar').style.width = `${((currentQ) / total) * 100}%`;
-    document.getElementById('transcript-box').style.display = 'none';
+    const tb = document.getElementById('transcript-box'); tb.style.display = 'none'; tb.value = '';
     document.getElementById('submit-btn').style.display = 'none';
     document.getElementById('voice-status').textContent = 'Press mic to start answering';
     document.getElementById('mic-btn').classList.remove('recording');
@@ -643,7 +657,7 @@ Respond ONLY with a JSON array of 7 strings. No preamble, no markdown. Example:
       currentTranscript += final;
       const tBox = document.getElementById('transcript-box');
       tBox.style.display = 'block';
-      tBox.textContent = currentTranscript + (interim ? ' ' + interim : '');
+      tBox.value = currentTranscript + (interim ? ' ' + interim : '');
     };
 
     recognition.onerror = e => {
@@ -671,7 +685,8 @@ Respond ONLY with a JSON array of 7 strings. No preamble, no markdown. Example:
 
   // ── SUBMIT ANSWER ──
   function submitAnswer() {
-    answers.push({ question: questions[currentQ], answer: currentTranscript.trim() });
+    const editedAnswer = document.getElementById('transcript-box').value.trim() || currentTranscript.trim();
+    answers.push({ question: questions[currentQ], answer: editedAnswer });
     currentQ++;
 
     if (currentQ < questions.length) {
@@ -764,6 +779,117 @@ Evaluate and respond ONLY with a JSON object (no markdown, no preamble):
     showScreen('feedback-screen');
   }
 
+  // ── DOWNLOAD PRACTICE GUIDE ──
+  async function downloadPracticeGuide() {
+    const btn = document.getElementById('download-btn');
+    btn.textContent = '⏳ Generating guide…';
+    btn.disabled = true;
+
+    try {
+      const transcript = answers.map((a, i) => `Q${i+1}: ${a.question}`).join('\n');
+
+      const response = await fetch(`${BACKEND_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          max_tokens: 3000,
+          messages: [{
+            role: 'user',
+            content: `You are an expert interview coach for ${targetRole} roles.
+
+Here are the interview questions asked:
+${transcript}
+
+Generate a practice guide in this EXACT JSON format (no markdown, no preamble):
+{
+  "ideal_answers": [
+    {"question": "Q1 text", "answer": "ideal answer text"},
+    {"question": "Q2 text", "answer": "ideal answer text"}
+  ],
+  "practice_questions": [
+    {"question": "practice Q1", "answer": "ideal answer"},
+    {"question": "practice Q2", "answer": "ideal answer"}
+  ]
+}
+
+ideal_answers: provide ideal answers for all ${answers.length} interview questions asked.
+practice_questions: provide exactly 20 additional practice questions with ideal answers for ${targetRole} role.`
+          }]
+        })
+      });
+
+      const data = await response.json();
+      const raw = data.content.map(c => c.text || '').join('');
+      const clean = raw.replace(/\`\`\`json|\`\`\`/g, '').trim();
+      const guide = JSON.parse(clean);
+
+      // Build Word document
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({
+              text: `Interview Practice Guide — ${targetRole}`,
+              heading: HeadingLevel.HEADING_1,
+              alignment: AlignmentType.CENTER,
+            }),
+            new Paragraph({ text: '' }),
+
+            new Paragraph({
+              text: 'PART 1: Your Interview Questions & Ideal Answers',
+              heading: HeadingLevel.HEADING_2,
+            }),
+            new Paragraph({ text: '' }),
+
+            ...guide.ideal_answers.flatMap((item, i) => [
+              new Paragraph({
+                children: [new TextRun({ text: `Q${i+1}: ${item.question}`, bold: true })]
+              }),
+              new Paragraph({
+                children: [new TextRun({ text: `Ideal Answer: ${item.answer}`, color: '2E7D32' })]
+              }),
+              new Paragraph({ text: '' }),
+            ]),
+
+            new Paragraph({
+              text: 'PART 2: 20 Practice Questions & Ideal Answers',
+              heading: HeadingLevel.HEADING_2,
+            }),
+            new Paragraph({ text: '' }),
+
+            ...guide.practice_questions.flatMap((item, i) => [
+              new Paragraph({
+                children: [new TextRun({ text: `Q${i+1}: ${item.question}`, bold: true })]
+              }),
+              new Paragraph({
+                children: [new TextRun({ text: `Ideal Answer: ${item.answer}`, color: '1565C0' })]
+              }),
+              new Paragraph({ text: '' }),
+            ]),
+          ]
+        }]
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Interview_Practice_Guide_${targetRole.replace(/ /g,'_')}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      btn.textContent = '✅ Downloaded!';
+      btn.disabled = false;
+
+    } catch (err) {
+      btn.textContent = '❌ Failed. Try again.';
+      btn.disabled = false;
+      console.error(err);
+    }
+  }
+
   // ── RESTART ──
   function restart() {
     questions = []; answers = []; currentQ = 0; currentTranscript = '';
@@ -775,11 +901,6 @@ Evaluate and respond ONLY with a JSON object (no markdown, no preamble):
 
   // Preload voices
   window.speechSynthesis.onvoiceschanged = () => synth.getVoices();
-    // Keep backend warm
-  setInterval(() => {
-    fetch('https://mock-interview-backend-ocw5.onrender.com/');
-  }, 4 * 60 * 1000);
 </script>
 </body>
-
 </html>
