@@ -483,7 +483,7 @@
   const BACKEND_URL = 'https://mock-interview-backend-ocw5.onrender.com';
 
   // ── GOOGLE LOGIN ──
- function handleGoogleLogin(response) {
+function handleGoogleLogin(response) {
   showScreen('setup-screen');
 }
   
@@ -805,10 +805,10 @@ ${questionList}
 
 Respond ONLY with a JSON array (no markdown, no preamble):
 [
-  {"question": "question text", "answer": "ideal answer in 3-4 sentences"},
+  {"question": "question text", "answer": "ideal answer max 2 sentences"},
   ...
 ]
-Provide ideal answers for all ${answers.length} questions.`);
+Keep each answer to 2 sentences max. Provide ideal answers for all ${answers.length} questions.`);
 
       const idealAnswers = JSON.parse(idealRaw);
 
@@ -816,11 +816,11 @@ Provide ideal answers for all ${answers.length} questions.`);
       btn.textContent = '⏳ Generating practice questions…';
       const practiceRaw = await callGroq(`You are an expert interview coach for ${targetRole} roles.
 
-Generate exactly 20 practice interview questions with ideal answers.
+Generate exactly 10 practice interview questions with ideal answers. Keep each answer to 2 sentences max.
 
 Respond ONLY with a JSON array (no markdown, no preamble):
 [
-  {"question": "question text", "answer": "ideal answer in 3-4 sentences"},
+  {"question": "question text", "answer": "ideal answer max 2 sentences"},
   ...
 ]`);
 
@@ -851,7 +851,7 @@ Respond ONLY with a JSON array (no markdown, no preamble):
               new Paragraph({ text: '' }),
             ]),
             new Paragraph({
-              text: 'PART 2: 20 Practice Questions & Ideal Answers',
+              text: 'PART 2: 10 Practice Questions & Ideal Answers',
               heading: HeadingLevel.HEADING_2,
             }),
             new Paragraph({ text: '' }),
