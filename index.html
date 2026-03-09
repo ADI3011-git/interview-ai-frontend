@@ -473,7 +473,10 @@
     <div class="feedback-grid" id="params-grid"></div>
     <div id="feedback-sections"></div>
 
-    <button class="btn" id="download-btn" onclick="downloadPracticeGuide()" style="margin-bottom:1rem;">📥 Download Practice Guide</button>
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem;">
+      <button class="btn" id="download-btn" onclick="downloadIdealAnswers()" style="flex:1;min-width:200px;">📥 Ideal Answers</button>
+      <button class="btn" id="sample-btn" onclick="downloadSampleQuestions()" style="flex:1;min-width:200px;background:var(--accent2);">📋 5 Sample Questions</button>
+    </div>
     <button class="btn btn-outline restart-btn" onclick="restart()">← Start New Interview</button>
   </div>
 </div>
@@ -773,13 +776,13 @@ Evaluate and respond ONLY with a JSON object (no markdown, no preamble):
     showScreen('feedback-screen');
   }
 
-  // ── DOWNLOAD PRACTICE GUIDE ──
-  async function callGroq(prompt) {
+    // ── DOWNLOAD PRACTICE GUIDE ──
+  async function callGroq(prompt, maxTokens = 1500) {
     const response = await fetch(`${BACKEND_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        max_tokens: 2000,
+        max_tokens: maxTokens,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -788,75 +791,78 @@ Evaluate and respond ONLY with a JSON object (no markdown, no preamble):
     return raw.replace(/```json|```/g, '').trim();
   }
 
-  async function downloadPracticeGuide() {
+  async function downloadIdealAnswers() {
     const btn = document.getElementById('download-btn');
-    btn.textContent = '⏳ Generating guide…';
+    btn.textContent = '⏳ Generating ideal answers…';
     btn.disabled = true;
 
     try {
       const questionList = answers.map((a, i) => `Q${i+1}: ${a.question}`).join('\n');
 
-      // Call 1: Ideal answers for interview questions
-      btn.textContent = '⏳ Generating ideal answers…';
-      const idealRaw = await callGroq(`You are an expert interview coach for ${targetRole} roles.
-
-Here are the interview questions:
+      const raw = await callGroq(`You are an expert interview coach for ${targetRole} roles.
+For each question below, write a concise ideal answer in 2 sentences only.
+Questions:
 ${questionList}
 
-Respond ONLY with a JSON array (no markdown, no preamble):
-[
-  {"question": "question text", "answer": "ideal answer max 2 sentences"},
-  ...
-]
-Keep each answer to 2 sentences max. Provide ideal answers for all ${answers.length} questions.`);
+Respond ONLY as a JSON array. No markdown. No extra text:
+[{"question":"...","answer":"..."}]`, 2000);
 
-      const idealAnswers = JSON.parse(idealRaw);
+      const idealAnswers = JSON.parse(raw);
 
-      // Call 2: 20 practice questions
-      btn.textContent = '⏳ Generating practice questions…';
-      const practiceRaw = await callGroq(`You are an expert interview coach for ${targetRole} roles.
-
-Generate exactly 10 practice interview questions with ideal answers. Keep each answer to 2 sentences max.
-
-Respond ONLY with a JSON array (no markdown, no preamble):
-[
-  {"question": "question text", "answer": "ideal answer max 2 sentences"},
-  ...
-]`);
-
-      const practiceQuestions = JSON.parse(practiceRaw);
-
-      // Build Word document
-      btn.textContent = '⏳ Building document…';
       const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
-
       const doc = new Document({
         sections: [{
-          properties: {},
           children: [
-            new Paragraph({
-              text: `Interview Practice Guide — ${targetRole}`,
-              heading: HeadingLevel.HEADING_1,
-              alignment: AlignmentType.CENTER,
-            }),
-            new Paragraph({ text: '' }),
-            new Paragraph({
-              text: 'PART 1: Your Interview Questions & Ideal Answers',
-              heading: HeadingLevel.HEADING_2,
-            }),
+            new Paragraph({ text: `Ideal Answers — ${targetRole}`, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
             new Paragraph({ text: '' }),
             ...idealAnswers.flatMap((item, i) => [
-              new Paragraph({ children: [new TextRun({ text: `Q${i+1}: ${item.question}`, bold: true, size: 24 })] }),
+              new Paragraph({ children: [new TextRun({ text: `Q${i+1}: ${item.question}`, bold: true })] }),
               new Paragraph({ children: [new TextRun({ text: `Ideal Answer: ${item.answer}`, color: '2E7D32' })] }),
               new Paragraph({ text: '' }),
             ]),
-            new Paragraph({
-              text: 'PART 2: 10 Practice Questions & Ideal Answers',
-              heading: HeadingLevel.HEADING_2,
-            }),
+          ]
+        }]
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Ideal_Answers_${targetRole.replace(/ /g,'_')}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      btn.textContent = '✅ Downloaded!';
+      btn.disabled = false;
+
+    } catch (err) {
+      btn.textContent = '❌ Failed. Try again.';
+      btn.disabled = false;
+      alert('Error: ' + err.message);
+    }
+  }
+
+  async function downloadSampleQuestions() {
+    const btn = document.getElementById('sample-btn');
+    btn.textContent = '⏳ Generating…';
+    btn.disabled = true;
+
+    try {
+      const raw = await callGroq(`You are an expert interview coach for ${targetRole} roles.
+Generate exactly 5 common interview questions with concise ideal answers (2 sentences each).
+
+Respond ONLY as a JSON array. No markdown. No extra text:
+[{"question":"...","answer":"..."}]`, 1500);
+
+      const sampleQs = JSON.parse(raw);
+
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
+      const doc = new Document({
+        sections: [{
+          children: [
+            new Paragraph({ text: `5 Sample Questions — ${targetRole}`, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
             new Paragraph({ text: '' }),
-            ...practiceQuestions.flatMap((item, i) => [
-              new Paragraph({ children: [new TextRun({ text: `Q${i+1}: ${item.question}`, bold: true, size: 24 })] }),
+            ...sampleQs.flatMap((item, i) => [
+              new Paragraph({ children: [new TextRun({ text: `Q${i+1}: ${item.question}`, bold: true })] }),
               new Paragraph({ children: [new TextRun({ text: `Ideal Answer: ${item.answer}`, color: '1565C0' })] }),
               new Paragraph({ text: '' }),
             ]),
@@ -868,29 +874,16 @@ Respond ONLY with a JSON array (no markdown, no preamble):
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Interview_Practice_Guide_${targetRole.replace(/ /g,'_')}.docx`;
+      a.download = `Sample_Questions_${targetRole.replace(/ /g,'_')}.docx`;
       a.click();
       URL.revokeObjectURL(url);
-
       btn.textContent = '✅ Downloaded!';
       btn.disabled = false;
 
     } catch (err) {
       btn.textContent = '❌ Failed. Try again.';
       btn.disabled = false;
-      console.error(err);
       alert('Error: ' + err.message);
-    }
-  }
-
-  // ── SKIP QUESTION ──
-  function skipQuestion() {
-    answers.push({ question: questions[currentQ], answer: '[Skipped]' });
-    currentQ++;
-    if (currentQ < questions.length) {
-      showQuestion();
-    } else {
-      generateFeedback();
     }
   }
 
