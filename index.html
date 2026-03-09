@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>InterviewAI — Voice Mock Interview</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/docx/7.8.2/docx.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
 <style>
   :root {
@@ -473,10 +472,8 @@
     <div class="feedback-grid" id="params-grid"></div>
     <div id="feedback-sections"></div>
 
-    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem;">
-      <button class="btn" id="download-btn" onclick="downloadIdealAnswers()" style="flex:1;min-width:200px;">📥 Ideal Answers</button>
-      <button class="btn" id="sample-btn" onclick="downloadSampleQuestions()" style="flex:1;min-width:200px;background:var(--accent2);">📋 5 Sample Questions</button>
-    </div>
+    <button class="btn" id="download-btn" onclick="downloadIdealAnswers()" style="margin-bottom:1rem;">📥 View Ideal Answers</button>
+    <div id="ideal-answers-section" style="display:none;margin-bottom:1rem;"></div>
     <button class="btn btn-outline restart-btn" onclick="restart()">← Start New Interview</button>
   </div>
 </div>
@@ -776,21 +773,7 @@ Evaluate and respond ONLY with a JSON object (no markdown, no preamble):
     showScreen('feedback-screen');
   }
 
-    // ── DOWNLOAD PRACTICE GUIDE ──
-  async function callGroq(prompt, maxTokens = 1500) {
-    const response = await fetch(`${BACKEND_URL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        max_tokens: maxTokens,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    const data = await response.json();
-    const raw = data.content.map(c => c.text || '').join('');
-    return raw.replace(/```json|```/g, '').trim();
-  }
-
+      // ── IDEAL ANSWERS ──
   async function downloadIdealAnswers() {
     const btn = document.getElementById('download-btn');
     btn.textContent = '⏳ Generating ideal answers…';
@@ -799,85 +782,42 @@ Evaluate and respond ONLY with a JSON object (no markdown, no preamble):
     try {
       const questionList = answers.map((a, i) => `Q${i+1}: ${a.question}`).join('\n');
 
-      const raw = await callGroq(`You are an expert interview coach for ${targetRole} roles.
-For each question below, write a concise ideal answer in 2 sentences only.
+      const response = await fetch(`${BACKEND_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          max_tokens: 1500,
+          messages: [{ role: 'user', content: `You are an expert interview coach for ${targetRole} roles.
+For each question below, write a concise ideal answer in 2 sentences.
 Questions:
 ${questionList}
 
-Respond ONLY as a JSON array. No markdown. No extra text:
-[{"question":"...","answer":"..."}]`, 2000);
+Respond ONLY as a JSON array. No markdown. No extra text. Example:
+[{"question":"Q text","answer":"Answer text"}]` }]
+        })
+      });
 
+      const data = await response.json();
+      const raw = data.content.map(c => c.text || '').join('').replace(/```json|```/g, '').trim();
       const idealAnswers = JSON.parse(raw);
 
-      const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
-      const doc = new Document({
-        sections: [{
-          children: [
-            new Paragraph({ text: `Ideal Answers — ${targetRole}`, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
-            new Paragraph({ text: '' }),
-            ...idealAnswers.flatMap((item, i) => [
-              new Paragraph({ children: [new TextRun({ text: `Q${i+1}: ${item.question}`, bold: true })] }),
-              new Paragraph({ children: [new TextRun({ text: `Ideal Answer: ${item.answer}`, color: '2E7D32' })] }),
-              new Paragraph({ text: '' }),
-            ]),
-          ]
-        }]
-      });
+      // Show on screen
+      const section = document.getElementById('ideal-answers-section');
+      section.style.display = 'block';
+      section.innerHTML = `
+        <div class="feedback-section">
+          <h3 class="accent">💡 Ideal Answers</h3>
+          <ul style="list-style:none;display:flex;flex-direction:column;gap:1rem;">
+            ${idealAnswers.map((item, i) => `
+              <li>
+                <div style="font-weight:600;color:var(--text);margin-bottom:0.3rem;">Q${i+1}: ${item.question}</div>
+                <div style="color:var(--success);font-size:0.9rem;">${item.answer}</div>
+              </li>
+            `).join('')}
+          </ul>
+        </div>`;
 
-      const blob = await Packer.toBlob(doc);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Ideal_Answers_${targetRole.replace(/ /g,'_')}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
-      btn.textContent = '✅ Downloaded!';
-      btn.disabled = false;
-
-    } catch (err) {
-      btn.textContent = '❌ Failed. Try again.';
-      btn.disabled = false;
-      alert('Error: ' + err.message);
-    }
-  }
-
-  async function downloadSampleQuestions() {
-    const btn = document.getElementById('sample-btn');
-    btn.textContent = '⏳ Generating…';
-    btn.disabled = true;
-
-    try {
-      const raw = await callGroq(`You are an expert interview coach for ${targetRole} roles.
-Generate exactly 5 common interview questions with concise ideal answers (2 sentences each).
-
-Respond ONLY as a JSON array. No markdown. No extra text:
-[{"question":"...","answer":"..."}]`, 1500);
-
-      const sampleQs = JSON.parse(raw);
-
-      const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
-      const doc = new Document({
-        sections: [{
-          children: [
-            new Paragraph({ text: `5 Sample Questions — ${targetRole}`, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
-            new Paragraph({ text: '' }),
-            ...sampleQs.flatMap((item, i) => [
-              new Paragraph({ children: [new TextRun({ text: `Q${i+1}: ${item.question}`, bold: true })] }),
-              new Paragraph({ children: [new TextRun({ text: `Ideal Answer: ${item.answer}`, color: '1565C0' })] }),
-              new Paragraph({ text: '' }),
-            ]),
-          ]
-        }]
-      });
-
-      const blob = await Packer.toBlob(doc);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Sample_Questions_${targetRole.replace(/ /g,'_')}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
-      btn.textContent = '✅ Downloaded!';
+      btn.textContent = '✅ Done!';
       btn.disabled = false;
 
     } catch (err) {
