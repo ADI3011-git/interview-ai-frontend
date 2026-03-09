@@ -827,6 +827,20 @@ Respond ONLY as a JSON array. No markdown. No extra text. Example:
     }
   }
 
+  // ── SKIP QUESTION ──
+  function skipQuestion() {
+    synth.cancel();
+    if (recognition) recognition.stop();
+    isRecording = false;
+    answers.push({ question: questions[currentQ], answer: '[Skipped]' });
+    currentQ++;
+    if (currentQ < questions.length) {
+      showQuestion();
+    } else {
+      generateFeedback();
+    }
+  }
+
   // ── RESTART ──
   function restart() {
     questions = []; answers = []; currentQ = 0; currentTranscript = '';
