@@ -775,6 +775,11 @@ Evaluate and respond ONLY with a JSON object (no markdown, no preamble):
 
   // Preload voices
   window.speechSynthesis.onvoiceschanged = () => synth.getVoices();
+    // Keep backend warm
+  setInterval(() => {
+    fetch('https://mock-interview-backend-ocw5.onrender.com/');
+  }, 4 * 60 * 1000);
 </script>
 </body>
+
 </html>
