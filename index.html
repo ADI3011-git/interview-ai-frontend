@@ -480,20 +480,8 @@
   const BACKEND_URL = 'https://mock-interview-backend-ocw5.onrender.com';
 
   // ── GOOGLE LOGIN ──
-  const ALLOWED_EMAILS = [
-    "adityakhairwad158@gmail.com",  // Add your friends Gmail here
-  ];
-
-  function handleGoogleLogin(response) {
-    const payload = JSON.parse(atob(response.credential.split('.')[1]));
-    const email = payload.email;
-    if (ALLOWED_EMAILS.includes(email)) {
-      showScreen('setup-screen');
-    } else {
-      const err = document.getElementById('login-error');
-      err.textContent = 'Access denied. Your email is not authorized.';
-      err.style.display = 'block';
-    }
+function handleGoogleLogin(response) {
+    showScreen('setup-screen');
   }
   let resumeText = '';
   let targetRole = '';
@@ -904,3 +892,4 @@ practice_questions: provide exactly 20 additional practice questions with ideal 
 </script>
 </body>
 </html>
+
